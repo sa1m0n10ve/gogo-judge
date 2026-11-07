@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f1f18">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ポーカー帳">
+<title>ポーカー収支帳</title>
+<style>
+:root {
+  --bg: #0f1f18;
+  --card: #172c22;
+  --input: #10231a;
+  --border: #2d4a3b;
+  --text: #eef5f0;
+  --dim: #9db5a7;
+  --accent: #e8c15a;
+  --plus: #4fd18b;
+  --minus: #ff6b6b;
+  --danger: #d9534f;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Noto Sans JP", Meiryo, sans-serif;
+  background: radial-gradient(ellipse at 50% -20%, #1f4a35 0%, transparent 60%), var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.55;
+  -webkit-tap-highlight-color: transparent;
+}
+header {
+  display: flex; align-items: center; gap: 10px;
+  max-width: 720px; margin: 0 auto;
+  padding: calc(14px + env(safe-area-inset-top)) 16px 10px;
+}
+header h1 { font-size: 20px; font-weight: 900; letter-spacing: 1px; }
+header h1 .suit { color: var(--minus); }
+header .back {
+  background: none; border: 1px solid var(--border); color: var(--text);
+  border-radius: 8px; padding: 6px 10px; font-size: 14px; cursor: pointer;
+}
+main {
+  max-width: 720px; margin: 0 auto;
+  padding: 0 16px calc(40px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 14px;
+}
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 14px; padding: 16px;
+}
+.card h2 { font-size: 15px; color: var(--accent); margin-bottom: 12px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.grow { flex: 1; min-width: 0; }
+label.f { display: block; font-size: 12px; color: var(--dim); font-weight: 700; margin-bottom: 4px; }
+input, select {
+  width: 100%; background: var(--input); color: var(--text);
+  border: 1.5px solid var(--border); border-radius: 9px;
+  padding: 9px 10px; font-size: 16px; outline: none; font-family: inherit;
+}
+input:focus, select:focus { border-color: var(--accent); }
+input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+button {
+  font-family: inherit; cursor: pointer; border-radius: 9px;
+  font-size: 14px; font-weight: 700; padding: 9px 14px;
+  border: 1.5px solid var(--border); background: var(--input); color: var(--text);
+}
+button.primary { background: var(--accent); color: #1b1606; border-color: var(--accent); }
+button.danger { color: var(--minus); border-color: color-mix(in srgb, var(--danger) 60%, transparent); }
+button.small { padding: 5px 9px; font-size: 12.5px; }
+button.full { width: 100%; }
+.seg { display: flex; border: 1.5px solid var(--border); border-radius: 10px; overflow: hidden; }
+.seg button { flex: 1; border: none; border-radius: 0; background: var(--input); color: var(--dim); }
+.seg button.on { background: var(--accent); color: #1b1606; }
+.hint { font-size: 12px; color: var(--dim); }
+.empty { color: var(--dim); font-size: 14px; text-align: center; padding: 12px 0; }
+.plus { color: var(--plus); }
+.minus { color: var(--minus); }
+.num { font-variant-numeric: tabular-nums; font-weight: 800; }
+
+/* session list */
+.s-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 12px; margin-bottom: 8px; background: var(--input);
+}
+.s-item:last-child { margin-bottom: 0; }
+.s-item .badge {
+  font-size: 11px; padding: 2px 7px; border-radius: 20px; border: 1px solid var(--accent); color: var(--accent);
+  white-space: nowrap;
+}
+.s-item .meta { font-size: 12px; color: var(--dim); font-weight: 500; }
+
+/* players chips */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--input); border: 1.5px solid var(--border); border-radius: 20px;
+  padding: 5px 12px; font-size: 14px; font-weight: 700; color: var(--text);
+}
+.chip.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, var(--input)); }
+.chip .x { color: var(--dim); font-size: 13px; }
+
+/* entries */
+.entry { border: 1px solid var(--border); border-radius: 11px; padding: 12px; background: var(--input); margin-bottom: 10px; }
+.entry:last-child { margin-bottom: 0; }
+.entry-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
+.entry-name { font-weight: 800; font-size: 16px; }
+.buyins { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.buyin {
+  display: inline-flex; align-items: center; gap: 4px; background: var(--card);
+  border: 1px solid var(--border); border-radius: 8px; padding: 3px 4px 3px 8px; font-size: 13px;
+}
+.buyin input { width: 84px; padding: 4px 6px; font-size: 15px; }
+.buyin button { padding: 2px 7px; font-size: 12px; border: none; background: none; color: var(--dim); }
+.entry .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.entry .res { text-align: right; font-size: 13px; color: var(--dim); }
+.entry .res .num { font-size: 18px; }
+
+/* summary */
+.sum-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.sum-box { background: var(--input); border-radius: 10px; padding: 10px; text-align: center; }
+.sum-box .k { font-size: 11.5px; color: var(--dim); }
+.sum-box .v { font-size: 17px; }
+.warn {
+  background: color-mix(in srgb, var(--minus) 14%, transparent); border: 1px solid var(--minus);
+  color: #ffd2d2; border-radius: 10px; padding: 9px 11px; font-size: 13px; margin-bottom: 12px;
+}
+.ok {
+  background: color-mix(in srgb, var(--plus) 12%, transparent); border: 1px solid var(--plus);
+  color: #cdf5de; border-radius: 10px; padding: 9px 11px; font-size: 13px; margin-bottom: 12px;
+}
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { padding: 7px 6px; border-bottom: 1px solid var(--border); }
+th { font-size: 12px; color: var(--dim); text-align: left; font-weight: 700; }
+td.r, th.r { text-align: right; }
+.transfer {
+  display: flex; align-items: center; gap: 8px; padding: 10px 12px;
+  background: var(--input); border-radius: 10px; margin-bottom: 6px; font-weight: 700;
+}
+.transfer .arrow { color: var(--accent); }
+.transfer .amt { margin-left: auto; font-size: 17px; }
+.payouts { display: flex; flex-wrap: wrap; gap: 6px; }
+.payout { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--dim); }
+.payout input { width: 62px; padding: 5px 6px; font-size: 15px; }
+.hidden { display: none !important; }
+.toast {
+  position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  background: #000c; color: #fff; padding: 9px 16px; border-radius: 20px; font-size: 14px;
+  opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 10;
+}
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <button class="back hidden" id="backBtn">‹ 一覧</button>
+  <h1><span class="suit">♥</span> ポーカー収支帳 <span class="suit">♦</span></h1>
+</header>
+
+<main id="homeView">
+  <section class="card">
+    <button class="primary full" id="newCashBtn">＋ 新しいキャッシュゲーム</button>
+    <div style="height:8px"></div>
+    <button class="full" id="newTourBtn">＋ 新しいトーナメント</button>
+  </section>
+
+  <section class="card">
+    <h2>セッション履歴</h2>
+    <div id="sessionList"></div>
+  </section>
+
+  <section class="card">
+    <h2>プレイヤー</h2>
+    <div class="row" style="margin-bottom:10px">
+      <input class="grow" id="newPlayerName" placeholder="名前を追加" maxlength="20">
+      <button id="addPlayerBtn">追加</button>
+    </div>
+    <div class="chips" id="playerList"></div>
+    <p class="hint" style="margin-top:8px">ここで登録した名前を各セッションで選べます。</p>
+  </section>
+
+  <section class="card">
+    <h2>バックアップ</h2>
+    <div class="row">
+      <button id="exportBtn">書き出し (JSON)</button>
+      <button id="importBtn">読み込み</button>
+      <input type="file" id="importFile" accept="application/json,.json" class="hidden">
+    </div>
+    <p class="hint" style="margin-top:8px">データはこの端末のブラウザ内に保存されます。機種変更や他の人への共有はJSONファイルで行ってください。</p>
+  </section>
+</main>
+
+<main id="sessionView" class="hidden">
+  <section class="card">
+    <div class="seg" id="typeSeg" style="margin-bottom:12px">
+      <button data-type="cash">キャッシュゲーム</button>
+      <button data-type="tournament">トーナメント</button>
+    </div>
+    <div class="fields">
+      <div><label class="f">日付</label><input type="date" id="sDate"></div>
+      <div><label class="f">メモ（場所など）</label><input id="sMemo" placeholder="例: Aさん宅"></div>
+      <div class="cash-only"><label class="f">レート（1チップ＝何円）</label><input type="number" id="sRate" inputmode="decimal" min="0" step="any"></div>
+      <div class="cash-only"><label class="f">標準バイイン（チップ）</label><input type="number" id="sDefaultBuyin" inputmode="numeric" min="0"></div>
+      <div class="tour-only"><label class="f">参加費（1エントリー・円）</label><input type="number" id="sFee" inputmode="numeric" min="0"></div>
+    </div>
+    <div class="tour-only" style="margin-top:12px">
+      <label class="f">賞金配分（%）</label>
+      <div class="payouts" id="payoutList"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="small" id="addPayoutBtn">＋ 入賞枠</button>
+        <button class="small" id="rmPayoutBtn">− 入賞枠</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>参加者</h2>
+    <div class="chips" id="pickPlayers"></div>
+    <div class="row" style="margin-top:10px">
+      <input class="grow" id="quickPlayerName" placeholder="新しい人をその場で追加" maxlength="20">
+      <button id="quickAddBtn">追加</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 id="entriesTitle">収支入力</h2>
+    <div id="entries"></div>
+  </section>
+
+  <section class="card">
+    <h2>結果</h2>
+    <div id="summary"></div>
+  </section>
+
+  <section class="card">
+    <h2>精算（誰が誰に払うか）</h2>
+    <div id="settlement"></div>
+    <button class="full" id="copyBtn" style="margin-top:10px">結果をコピー（LINE等に貼り付け）</button>
+  </section>
+
+  <section class="card">
+    <button class="danger full" id="deleteSessionBtn">このセッションを削除</button>
+  </section>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+
+/* ================= データ ================= */
+const KEY = 'pokerLedger.v1';
+let db = { players: [], sessions: [] };
+let currentId = null;
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function load() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      if (d && Array.isArray(d.players) && Array.isArray(d.sessions)) db = d;
+    }
+  } catch (e) { /* 保存領域が使えない場合はメモリのみで動作 */ }
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { toast('保存に失敗しました'); }
+}
+const $ = id => document.getElementById(id);
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function playerName(pid) { const p = db.players.find(p => p.id === pid); return p ? p.name : '(削除済み)'; }
+function today() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function num(v) { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; }
+function yen(n) { const r = Math.round(n); return (r > 0 ? '+' : r < 0 ? '−' : '±') + Math.abs(r).toLocaleString() + '円'; }
+function yenPlain(n) { return Math.round(n).toLocaleString() + '円'; }
+function chips(n) { return (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n).toLocaleString(); }
+function cls(n) { return Math.round(n) > 0 ? 'plus' : Math.round(n) < 0 ? 'minus' : ''; }
+
+let toastTimer;
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1600);
+}
+
+function addPlayer(name) {
+  name = name.trim();
+  if (!name) return null;
+  const exist = db.players.find(p => p.name === name);
+  if (exist) return exist;
+  const p = { id: uid(), name };
+  db.players.push(p);
+  save();
+  return p;
+}
+
+/* ================= 計算 ================= */
+// 各参加者の損益（円）を返す: [{pid, profit, ...}]
+function computeResults(s) {
+  if (s.type === 'cash') {
+    const rate = num(s.rate);
+    const rows = s.entries.map(e => {
+      const buyin = e.buyins.reduce((a, b) => a + num(b), 0);
+      const done = e.cashout !== '' && e.cashout != null;
+      const cashout = num(e.cashout);
+      const chipDiff = cashout - buyin;
+      return { pid: e.pid, buyin, cashout, done, chipDiff, profit: done ? chipDiff * rate : 0 };
+    });
+    const totalIn = rows.reduce((a, r) => a + r.buyin, 0);
+    const totalOut = rows.reduce((a, r) => a + r.cashout, 0);
+    const allDone = rows.length > 0 && rows.every(r => r.done);
+    return { rows, totalIn, totalOut, diff: totalOut - totalIn, allDone };
+  }
+  // トーナメント
+  const fee = num(s.fee);
+  const totalEntries = s.entries.reduce((a, e) => a + Math.max(1, Math.floor(num(e.entries) || 1)), 0);
+  const pool = fee * totalEntries;
+  const pcts = s.payouts.map(num);
+  const pctSum = pcts.reduce((a, b) => a + b, 0);
+  // 各順位の賞金（端数は1位へ）
+  const prizeByPlace = pcts.map(p => Math.floor(pool * p / 100));
+  const used = prizeByPlace.reduce((a, b) => a + b, 0);
+  if (prizeByPlace.length && Math.abs(pctSum - 100) < 1e-9) prizeByPlace[0] += pool - used;
+
+  const ranked = s.entries
+    .map(e => ({ e, rank: Math.floor(num(e.rank)) }))
+    .filter(x => x.rank >= 1)
+    .sort((a, b) => a.rank - b.rank);
+  const prizeOf = new Map();
+  // 同順位は該当する賞金枠を合算して等分
+  let pos = 0;
+  for (let i = 0; i < ranked.length;) {
+    let j = i;
+    while (j < ranked.length && ranked[j].rank === ranked[i].rank) j++;
+    const k = j - i;
+    let sum = 0;
+    for (let q = pos; q < pos + k; q++) sum += prizeByPlace[q] || 0;
+    for (let q = i; q < j; q++) prizeOf.set(ranked[q].e, sum / k);
+    pos += k; i = j;
+  }
+  const rows = s.entries.map(e => {
+    const n = Math.max(1, Math.floor(num(e.entries) || 1));
+    const paid = n * fee;
+    const prize = prizeOf.get(e) || 0;
+    return { pid: e.pid, entries: n, paid, prize, rank: Math.floor(num(e.rank)) || null, profit: prize - paid };
+  });
+  const ranks = rows.map(r => r.rank).filter(Boolean);
+  const allRanked = rows.length > 0 && ranks.length === rows.length;
+  return { rows, pool, pctSum, totalEntries, allRanked };
+}
+
+// 最小回数に近い送金リスト（貪欲法）
+function settle(rows) {
+  const bal = rows.map(r => ({ pid: r.pid, v: Math.round(r.profit) }));
+  const cred = bal.filter(b => b.v > 0).sort((a, b) => b.v - a.v);
+  const debt = bal.filter(b => b.v < 0).map(b => ({ pid: b.pid, v: -b.v })).sort((a, b) => b.v - a.v);
+  const out = [];
+  let i = 0, j = 0;
+  while (i < debt.length && j < cred.length) {
+    const amt = Math.min(debt[i].v, cred[j].v);
+    if (amt > 0) out.push({ from: debt[i].pid, to: cred[j].pid, amt });
+    debt[i].v -= amt; cred[j].v -= amt;
+    if (debt[i].v === 0) i++;
+    if (cred[j].v === 0) j++;
+  }
+  return out;
+}
+
+/* ================= ホーム画面 ================= */
+function renderHome() {
+  const list = $('sessionList');
+  const sessions = [...db.sessions].sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.created - a.created);
+  if (!sessions.length) {
+    list.innerHTML = '<div class="empty">まだ記録がありません</div>';
+  } else {
+    list.innerHTML = sessions.map(s => {
+      const r = computeResults(s);
+      const top = [...r.rows].sort((a, b) => b.profit - a.profit)[0];
+      const names = s.entries.map(e => esc(playerName(e.pid))).join('・') || '参加者なし';
+      const sub = s.type === 'cash'
+        ? `レート ${num(s.rate)}円 / ${names}`
+        : `参加費 ${yenPlain(num(s.fee))} / ${names}`;
+      const topTxt = top && Math.round(top.profit) > 0
+        ? `<span class="num plus">${esc(playerName(top.pid))} ${yen(top.profit)}</span>` : '';
+      return `<button class="s-item" data-id="${s.id}">
+        <div class="grow">
+          <div>${esc(s.date || '日付なし')} ${s.memo ? '・' + esc(s.memo) : ''}</div>
+          <div class="meta">${sub}</div>
+          <div style="font-size:13px">${topTxt}</div>
+        </div>
+        <span class="badge">${s.type === 'cash' ? 'キャッシュ' : 'トナメ'}</span>
+      </button>`;
+    }).join('');
+  }
+
+  const pl = $('playerList');
+  pl.innerHTML = db.players.length
+    ? db.players.map(p => `<span class="chip">${esc(p.name)} <button class="x small" data-del="${p.id}" style="border:none;background:none;padding:0 2px">✕</button></span>`).join('')
+    : '<div class="empty" style="width:100%">プレイヤーを追加してください</div>';
+}
+
+function newSession(type) {
+  const last = db.sessions.filter(s => s.type === type).sort((a, b) => b.created - a.created)[0];
+  const s = {
+    id: uid(), type, created: Date.now(), date: today(), memo: '',
+    rate: last ? last.rate : 1,
+    defaultBuyin: last ? last.defaultBuyin : 100,
+    fee: last ? last.fee : 1000,
+    payouts: last ? [...last.payouts] : [70, 30],
+    entries: [],
+  };
+  // 前回（形式問わず）と同じ参加者を初期選択
+  const prev = [...db.sessions].sort((a, b) => b.created - a.created)[0];
+  if (prev) s.entries = prev.entries.filter(e => db.players.some(p => p.id === e.pid)).map(e => blankEntry(e.pid, type, s));
+  db.sessions.push(s);
+  save();
+  openSession(s.id);
+}
+function blankEntry(pid, type, s) {
+  return type === 'cash'
+    ? { pid, buyins: [s && s.defaultBuyin != null ? s.defaultBuyin : 100], cashout: '' }
+    : { pid, entries: 1, rank: '' };
+}
+
+/* ================= セッション画面 ================= */
+function cur() { return db.sessions.find(s => s.id === currentId); }
+
+function openSession(id) {
+  currentId = id;
+  $('homeView').classList.add('hidden');
+  $('sessionView').classList.remove('hidden');
+  $('backBtn').classList.remove('hidden');
+  const s = cur();
+  // セッション種別変更でフィールドが欠けないよう補完
+  s.payouts = s.payouts || [70, 30];
+  $('sDate').value = s.date || '';
+  $('sMemo').value = s.memo || '';
+  $('sRate').value = s.rate ?? '';
+  $('sDefaultBuyin').value = s.defaultBuyin ?? '';
+  $('sFee').value = s.fee ?? '';
+  renderSession();
+  window.scrollTo(0, 0);
+}
+function goHome() {
+  currentId = null;
+  $('sessionView').classList.add('hidden');
+  $('homeView').classList.remove('hidden');
+  $('backBtn').classList.add('hidden');
+  renderHome();
+  window.scrollTo(0, 0);
+}
+
+function renderSession() {
+  const s = cur();
+  if (!s) return goHome();
+  const isCash = s.type === 'cash';
+  document.querySelectorAll('#typeSeg button').forEach(b => b.classList.toggle('on', b.dataset.type === s.type));
+  document.querySelectorAll('.cash-only').forEach(el => el.classList.toggle('hidden', !isCash));
+  document.querySelectorAll('.tour-only').forEach(el => el.classList.toggle('hidden', isCash));
+
+  // 賞金配分
+  $('payoutList').innerHTML = s.payouts.map((p, i) =>
+    `<span class="payout">${i + 1}位 <input type="number" inputmode="decimal" data-payout="${i}" value="${esc(p)}">%</span>`).join('');
+
+  // 参加者選択
+  const inSession = new Set(s.entries.map(e => e.pid));
+  $('pickPlayers').innerHTML = db.players.length
+    ? db.players.map(p => `<button class="chip ${inSession.has(p.id) ? 'on' : ''}" data-pick="${p.id}">${inSession.has(p.id) ? '✓ ' : ''}${esc(p.name)}</button>`).join('')
+    : '<div class="empty" style="width:100%">下の欄から名前を追加してください</div>';
+
+  $('entriesTitle').textContent = isCash ? '収支入力（チップ枚数）' : '順位入力';
+  renderEntries();
+  renderResults();
+}
+
+function renderEntries() {
+  const s = cur();
+  const box = $('entries');
+  if (!s.entries.length) { box.innerHTML = '<div class="empty">参加者を選んでください</div>'; return; }
+  if (s.type === 'cash') {
+    box.innerHTML = s.entries.map((e, idx) => `
+      <div class="entry" data-idx="${idx}">
+        <div class="entry-head">
+          <span class="entry-name">${esc(playerName(e.pid))}</span>
+          <span class="res" data-res="${idx}"></span>
+        </div>
+        <label class="f">バイイン（${e.buyins.length}回）</label>
+        <div class="buyins">
+          ${e.buyins.map((b, bi) => `<span class="buyin"><input type="number" inputmode="numeric" data-buyin="${idx}:${bi}" value="${esc(b)}">${e.buyins.length > 1 ? `<button data-rmbuyin="${idx}:${bi}">✕</button>` : ''}</span>`).join('')}
+          <button class="small" data-addbuyin="${idx}">＋ リバイ</button>
+        </div>
+        <label class="f">終了時のチップ</label>
+        <input type="number" inputmode="numeric" data-cashout="${idx}" value="${esc(e.cashout ?? '')}" placeholder="未入力">
+      </div>`).join('');
+  } else {
+    box.innerHTML = s.entries.map((e, idx) => `
+      <div class="entry" data-idx="${idx}">
+        <div class="entry-head">
+          <span class="entry-name">${esc(playerName(e.pid))}</span>
+          <span class="res" data-res="${idx}"></span>
+        </div>
+        <div class="grid2">
+          <div><label class="f">順位</label><input type="number" inputmode="numeric" min="1" data-rank="${idx}" value="${esc(e.rank ?? '')}" placeholder="例: 1"></div>
+          <div><label class="f">エントリー数</label><input type="number" inputmode="numeric" min="1" data-entries="${idx}" value="${esc(e.entries ?? 1)}"></div>
+        </div>
+      </div>`).join('');
+  }
+}
+
+// 入力欄を再描画せずに結果だけ更新（入力中のフォーカスを保つ）
+function renderResults() {
+  const s = cur();
+  const r = computeResults(s);
+  const isCash = s.type === 'cash';
+
+  r.rows.forEach((row, idx) => {
+    const el = document.querySelector(`[data-res="${idx}"]`);
+    if (!el) return;
+    if (isCash) {
+      el.innerHTML = row.done
+        ? `${chips(row.chipDiff)}枚<br><span class="num ${cls(row.profit)}">${yen(row.profit)}</span>`
+        : `投入 ${row.buyin.toLocaleString()}枚`;
+    } else {
+      el.innerHTML = `支払 ${yenPlain(row.paid)}${row.prize ? ' / 賞金 ' + yenPlain(row.prize) : ''}<br><span class="num ${cls(row.profit)}">${yen(row.profit)}</span>`;
+    }
+  });
+
+  let html = '';
+  if (!r.rows.length) {
+    $('summary').innerHTML = '<div class="empty">参加者がいません</div>';
+    $('settlement').innerHTML = '<div class="empty">-</div>';
+    return;
+  }
+  if (isCash) {
+    html += `<div class="sum-grid">
+      <div class="sum-box"><div class="k">総バイイン</div><div class="v num">${r.totalIn.toLocaleString()}枚</div></div>
+      <div class="sum-box"><div class="k">総チップ（終了時）</div><div class="v num">${r.totalOut.toLocaleString()}枚</div></div>
+      <div class="sum-box"><div class="k">レート</div><div class="v num">${num(s.rate)}円/枚</div></div>
+    </div>`;
+    if (!r.allDone) html += `<div class="warn">終了時のチップが未入力の人がいます。</div>`;
+    else if (r.diff !== 0) html += `<div class="warn">チップの合計が合いません：終了時の合計がバイインより ${Math.abs(r.diff).toLocaleString()}枚 ${r.diff > 0 ? '多い' : '少ない'} です。数え直してください。</div>`;
+    else html += `<div class="ok">チップの合計が一致しました ✓</div>`;
+  } else {
+    html += `<div class="sum-grid">
+      <div class="sum-box"><div class="k">総エントリー</div><div class="v num">${r.totalEntries}</div></div>
+      <div class="sum-box"><div class="k">賞金総額</div><div class="v num">${yenPlain(r.pool)}</div></div>
+    </div>`;
+    if (Math.abs(r.pctSum - 100) > 1e-9) html += `<div class="warn">賞金配分の合計が ${r.pctSum}% です（100%にしてください）。</div>`;
+    if (!r.allRanked) html += `<div class="warn">順位が未入力の人がいます。</div>`;
+  }
+  const sorted = [...r.rows].sort((a, b) => b.profit - a.profit);
+  html += `<table><thead><tr><th>名前</th>${isCash ? '<th class="r">チップ</th>' : '<th class="r">順位</th>'}<th class="r">収支</th></tr></thead><tbody>`;
+  html += sorted.map(row => `<tr>
+    <td>${esc(playerName(row.pid))}</td>
+    <td class="r">${isCash ? (row.done ? chips(row.chipDiff) : '-') : (row.rank ? row.rank + '位' : '-')}</td>
+    <td class="r num ${cls(row.profit)}">${isCash && !row.done ? '-' : yen(row.profit)}</td>
+  </tr>`).join('');
+  html += '</tbody></table>';
+  $('summary').innerHTML = html;
+
+  const ready = isCash ? r.allDone : r.allRanked;
+  const transfers = settle(r.rows);
+  const net = r.rows.reduce((a, row) => a + Math.round(row.profit), 0);
+  let st = '';
+  if (!ready) st += '<p class="hint" style="margin-bottom:8px">※ 入力途中のため暫定の精算です。</p>';
+  if (net !== 0) st += `<div class="warn">収支の合計が ${yen(net)} ずれているため、精算額が完全には一致しません。</div>`;
+  st += transfers.length
+    ? transfers.map(t => `<div class="transfer"><span>${esc(playerName(t.from))}</span><span class="arrow">→</span><span>${esc(playerName(t.to))}</span><span class="amt num">${yenPlain(t.amt)}</span></div>`).join('')
+    : '<div class="empty">精算は不要です</div>';
+  $('settlement').innerHTML = st;
+}
+
+function shareText() {
+  const s = cur();
+  const r = computeResults(s);
+  const lines = [];
+  lines.push(`【ポーカー結果】${s.date || ''}${s.memo ? ' ' + s.memo : ''}`);
+  lines.push(s.type === 'cash' ? `キャッシュゲーム（1チップ=${num(s.rate)}円）` : `トーナメント（参加費${yenPlain(num(s.fee))}・賞金総額${yenPlain(r.pool)}）`);
+  lines.push('');
+  [...r.rows].sort((a, b) => b.profit - a.profit).forEach(row => {
+    const extra = s.type === 'cash' ? (row.done ? ` (${chips(row.chipDiff)}枚)` : '') : (row.rank ? ` (${row.rank}位)` : '');
+    lines.push(`${playerName(row.pid)}: ${yen(row.profit)}${extra}`);
+  });
+  const tr = settle(r.rows);
+  if (tr.length) {
+    lines.push('');
+    lines.push('▼精算');
+    tr.forEach(t => lines.push(`${playerName(t.from)} → ${playerName(t.to)}: ${yenPlain(t.amt)}`));
+  }
+  return lines.join('\n');
+}
+
+/* ================= イベント ================= */
+$('backBtn').onclick = goHome;
+$('newCashBtn').onclick = () => newSession('cash');
+$('newTourBtn').onclick = () => newSession('tournament');
+
+$('addPlayerBtn').onclick = () => {
+  if (addPlayer($('newPlayerName').value)) { $('newPlayerName').value = ''; renderHome(); }
+};
+$('newPlayerName').addEventListener('keydown', e => { if (e.key === 'Enter') $('addPlayerBtn').click(); });
+
+$('playerList').addEventListener('click', e => {
+  const id = e.target.dataset.del;
+  if (!id) return;
+  const used = db.sessions.some(s => s.entries.some(en => en.pid === id));
+  const name = playerName(id);
+  if (used) { toast(`${name}さんは記録があるため削除できません`); return; }
+  if (!confirm(`${name}さんを削除しますか？`)) return;
+  db.players = db.players.filter(p => p.id !== id);
+  save(); renderHome();
+});
+
+$('sessionList').addEventListener('click', e => {
+  const b = e.target.closest('[data-id]');
+  if (b) openSession(b.dataset.id);
+});
+
+$('typeSeg').addEventListener('click', e => {
+  const t = e.target.dataset.type;
+  const s = cur();
+  if (!t || t === s.type) return;
+  const hasData = s.type === 'cash'
+    ? s.entries.some(en => en.cashout !== '' && en.cashout != null)
+    : s.entries.some(en => en.rank !== '' && en.rank != null);
+  if (hasData && !confirm('形式を切り替えると入力した収支がリセットされます。よろしいですか？')) return;
+  s.type = t;
+  s.entries = s.entries.map(en => blankEntry(en.pid, t, s));
+  save(); renderSession();
+});
+
+function bindField(id, key, isNum) {
+  $(id).addEventListener('input', () => {
+    const s = cur();
+    s[key] = isNum ? $(id).value : $(id).value;
+    save(); renderResults();
+  });
+}
+bindField('sDate', 'date');
+bindField('sMemo', 'memo');
+bindField('sRate', 'rate', true);
+bindField('sDefaultBuyin', 'defaultBuyin', true);
+bindField('sFee', 'fee', true);
+
+$('payoutList').addEventListener('input', e => {
+  const i = e.target.dataset.payout;
+  if (i == null) return;
+  cur().payouts[+i] = e.target.value;
+  save(); renderResults();
+});
+$('addPayoutBtn').onclick = () => { cur().payouts.push(0); save(); renderSession(); };
+$('rmPayoutBtn').onclick = () => { const s = cur(); if (s.payouts.length > 1) { s.payouts.pop(); save(); renderSession(); } };
+
+$('pickPlayers').addEventListener('click', e => {
+  const b = e.target.closest('[data-pick]');
+  if (!b) return;
+  const s = cur();
+  const pid = b.dataset.pick;
+  const idx = s.entries.findIndex(en => en.pid === pid);
+  if (idx >= 0) {
+    if (!confirm(`${playerName(pid)}さんをこのセッションから外しますか？`)) return;
+    s.entries.splice(idx, 1);
+  } else {
+    s.entries.push(blankEntry(pid, s.type, s));
+  }
+  save(); renderSession();
+});
+
+$('quickAddBtn').onclick = () => {
+  const p = addPlayer($('quickPlayerName').value);
+  if (!p) return;
+  const s = cur();
+  if (!s.entries.some(en => en.pid === p.id)) s.entries.push(blankEntry(p.id, s.type, s));
+  $('quickPlayerName').value = '';
+  save(); renderSession();
+};
+$('quickPlayerName').addEventListener('keydown', e => { if (e.key === 'Enter') $('quickAddBtn').click(); });
+
+$('entries').addEventListener('input', e => {
+  const s = cur();
+  const d = e.target.dataset;
+  if (d.buyin) { const [i, bi] = d.buyin.split(':').map(Number); s.entries[i].buyins[bi] = e.target.value; }
+  else if (d.cashout != null) s.entries[+d.cashout].cashout = e.target.value;
+  else if (d.rank != null) s.entries[+d.rank].rank = e.target.value;
+  else if (d.entries != null) s.entries[+d.entries].entries = e.target.value;
+  else return;
+  save(); renderResults();
+});
+$('entries').addEventListener('click', e => {
+  const s = cur();
+  const d = e.target.dataset;
+  if (d.addbuyin != null) {
+    s.entries[+d.addbuyin].buyins.push(s.defaultBuyin ?? 100);
+  } else if (d.rmbuyin) {
+    const [i, bi] = d.rmbuyin.split(':').map(Number);
+    s.entries[i].buyins.splice(bi, 1);
+  } else return;
+  save(); renderEntries(); renderResults();
+});
+
+$('copyBtn').onclick = async () => {
+  const text = shareText();
+  try { await navigator.clipboard.writeText(text); toast('コピーしました'); }
+  catch (e) { prompt('以下をコピーしてください', text); }
+};
+
+$('deleteSessionBtn').onclick = () => {
+  if (!confirm('このセッションを削除します。元に戻せません。よろしいですか？')) return;
+  db.sessions = db.sessions.filter(s => s.id !== currentId);
+  save(); goHome();
+};
+
+$('exportBtn').onclick = () => {
+  const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `poker-ledger-${today()}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$('importBtn').onclick = () => $('importFile').click();
+$('importFile').onchange = async e => {
+  const f = e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    if (!d || !Array.isArray(d.players) || !Array.isArray(d.sessions)) throw new Error('format');
+    if (!confirm(`プレイヤー${d.players.length}人・セッション${d.sessions.length}件を読み込みます。現在のデータは上書きされます。よろしいですか？`)) return;
+    db = d; save(); renderHome(); toast('読み込みました');
+  } catch (err) { alert('ファイルの形式が正しくありません'); }
+};
+
+load();
+renderHome();
+</script>
+</body>
+</html>
