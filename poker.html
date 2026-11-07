@@ -19,6 +19,7 @@
   --plus: #4fd18b;
   --minus: #ff6b6b;
   --danger: #d9534f;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -145,6 +146,20 @@ td.r, th.r { text-align: right; }
 .payout { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--dim); }
 .payout input { width: 62px; padding: 5px 6px; font-size: 15px; }
 .hidden { display: none !important; }
+.modal-bg {
+  position: fixed; inset: 0; background: #000a; z-index: 20;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.modal {
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  padding: 18px; width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 12px;
+}
+.modal p { font-size: 15px; white-space: pre-wrap; }
+.modal textarea {
+  width: 100%; min-height: 160px; background: var(--input); color: var(--text);
+  border: 1.5px solid var(--border); border-radius: 9px; padding: 8px; font-size: 12px; font-family: ui-monospace, monospace;
+}
+.modal .row { justify-content: flex-end; }
 .toast {
   position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%);
   background: #000c; color: #fff; padding: 9px 16px; border-radius: 20px; font-size: 14px;
@@ -185,11 +200,13 @@ td.r, th.r { text-align: right; }
   <section class="card">
     <h2>バックアップ</h2>
     <div class="row">
-      <button id="exportBtn">書き出し (JSON)</button>
-      <button id="importBtn">読み込み</button>
-      <input type="file" id="importFile" accept="application/json,.json" class="hidden">
+      <button id="exportBtn">バックアップをコピー</button>
+      <button id="pasteBtn">貼り付けて復元</button>
+      <button id="importBtn">ファイルから復元</button>
+      <input type="file" id="importFile" accept="application/json,.json,text/plain" class="hidden">
     </div>
-    <p class="hint" style="margin-top:8px">データはこの端末のブラウザ内に保存されます。機種変更や他の人への共有はJSONファイルで行ってください。</p>
+    <textarea id="pasteArea" class="hidden" placeholder="コピーしたバックアップをここに貼り付け" style="width:100%;min-height:90px;margin-top:10px;background:var(--input);color:var(--text);border:1.5px solid var(--border);border-radius:9px;padding:8px;font-size:12px"></textarea>
+    <p class="hint" style="margin-top:8px">データはこの端末のブラウザ内に保存されます。機種変更や他の人への共有は「バックアップをコピー」した文字を保存・送信し、相手側で「貼り付けて復元」してください。</p>
   </section>
 </main>
 
@@ -247,6 +264,16 @@ td.r, th.r { text-align: right; }
 </main>
 
 <div class="toast" id="toast"></div>
+<div class="modal-bg hidden" id="modalBg">
+  <div class="modal" role="dialog" aria-modal="true">
+    <p id="modalMsg"></p>
+    <textarea id="modalText" class="hidden" readonly></textarea>
+    <div class="row">
+      <button id="modalCancel">キャンセル</button>
+      <button class="primary" id="modalOk">OK</button>
+    </div>
+  </div>
+</div>
 
 <script>
 'use strict';
@@ -281,6 +308,30 @@ function yen(n) { const r = Math.round(n); return (r > 0 ? '+' : r < 0 ? '−' :
 function yenPlain(n) { return Math.round(n).toLocaleString() + '円'; }
 function chips(n) { return (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n).toLocaleString(); }
 function cls(n) { return Math.round(n) > 0 ? 'plus' : Math.round(n) < 0 ? 'minus' : ''; }
+
+// ブラウザ標準の confirm/prompt は埋め込み表示で使えないため自前のダイアログを使う
+function dialog(msg, { text = null, ok = 'OK', cancel = 'キャンセル', danger = false } = {}) {
+  return new Promise(resolve => {
+    $('modalMsg').textContent = msg;
+    const ta = $('modalText');
+    ta.classList.toggle('hidden', text == null);
+    ta.value = text ?? '';
+    $('modalOk').textContent = ok;
+    $('modalOk').className = danger ? 'danger' : 'primary';
+    $('modalCancel').textContent = cancel;
+    $('modalCancel').classList.toggle('hidden', cancel == null);
+    $('modalBg').classList.remove('hidden');
+    if (text != null) { ta.focus(); ta.select(); }
+    const done = v => { $('modalBg').classList.add('hidden'); $('modalOk').onclick = $('modalCancel').onclick = null; resolve(v); };
+    $('modalOk').onclick = () => done(true);
+    $('modalCancel').onclick = () => done(false);
+  });
+}
+const ask = (msg, opts) => dialog(msg, { danger: true, ok: 'はい', ...opts });
+async function copyText(text, okMsg) {
+  try { await navigator.clipboard.writeText(text); toast(okMsg); return; } catch (e) { /* fallthrough */ }
+  await dialog('自動コピーできませんでした。下の文字を長押しで全選択してコピーしてください。', { text, cancel: null, ok: '閉じる' });
+}
 
 let toastTimer;
 function toast(msg) {
@@ -605,13 +656,13 @@ $('addPlayerBtn').onclick = () => {
 };
 $('newPlayerName').addEventListener('keydown', e => { if (e.key === 'Enter') $('addPlayerBtn').click(); });
 
-$('playerList').addEventListener('click', e => {
+$('playerList').addEventListener('click', async e => {
   const id = e.target.dataset.del;
   if (!id) return;
   const used = db.sessions.some(s => s.entries.some(en => en.pid === id));
   const name = playerName(id);
   if (used) { toast(`${name}さんは記録があるため削除できません`); return; }
-  if (!confirm(`${name}さんを削除しますか？`)) return;
+  if (!await ask(`${name}さんを削除しますか？`)) return;
   db.players = db.players.filter(p => p.id !== id);
   save(); renderHome();
 });
@@ -621,14 +672,14 @@ $('sessionList').addEventListener('click', e => {
   if (b) openSession(b.dataset.id);
 });
 
-$('typeSeg').addEventListener('click', e => {
+$('typeSeg').addEventListener('click', async e => {
   const t = e.target.dataset.type;
   const s = cur();
   if (!t || t === s.type) return;
   const hasData = s.type === 'cash'
     ? s.entries.some(en => en.cashout !== '' && en.cashout != null)
     : s.entries.some(en => en.rank !== '' && en.rank != null);
-  if (hasData && !confirm('形式を切り替えると入力した収支がリセットされます。よろしいですか？')) return;
+  if (hasData && !await ask('形式を切り替えると入力した収支がリセットされます。よろしいですか？')) return;
   s.type = t;
   s.entries = s.entries.map(en => blankEntry(en.pid, t, s));
   save(); renderSession();
@@ -656,14 +707,14 @@ $('payoutList').addEventListener('input', e => {
 $('addPayoutBtn').onclick = () => { cur().payouts.push(0); save(); renderSession(); };
 $('rmPayoutBtn').onclick = () => { const s = cur(); if (s.payouts.length > 1) { s.payouts.pop(); save(); renderSession(); } };
 
-$('pickPlayers').addEventListener('click', e => {
+$('pickPlayers').addEventListener('click', async e => {
   const b = e.target.closest('[data-pick]');
   if (!b) return;
   const s = cur();
   const pid = b.dataset.pick;
   const idx = s.entries.findIndex(en => en.pid === pid);
   if (idx >= 0) {
-    if (!confirm(`${playerName(pid)}さんをこのセッションから外しますか？`)) return;
+    if (!await ask(`${playerName(pid)}さんをこのセッションから外しますか？`)) return;
     s.entries.splice(idx, 1);
   } else {
     s.entries.push(blankEntry(pid, s.type, s));
@@ -704,36 +755,38 @@ $('entries').addEventListener('click', e => {
 });
 
 $('copyBtn').onclick = async () => {
-  const text = shareText();
-  try { await navigator.clipboard.writeText(text); toast('コピーしました'); }
-  catch (e) { prompt('以下をコピーしてください', text); }
+  await copyText(shareText(), 'コピーしました');
 };
 
-$('deleteSessionBtn').onclick = () => {
-  if (!confirm('このセッションを削除します。元に戻せません。よろしいですか？')) return;
+$('deleteSessionBtn').onclick = async () => {
+  if (!await ask('このセッションを削除します。元に戻せません。よろしいですか？', { ok: '削除する' })) return;
   db.sessions = db.sessions.filter(s => s.id !== currentId);
   save(); goHome();
 };
 
-$('exportBtn').onclick = () => {
-  const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `poker-ledger-${today()}.json`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+$('exportBtn').onclick = () => copyText(JSON.stringify(db), 'バックアップをコピーしました。メモ帳やLINEのKeepに貼って保存してください');
+$('pasteBtn').onclick = async () => {
+  $('pasteArea').classList.toggle('hidden');
+  $('pasteArea').focus();
 };
+$('pasteArea').addEventListener('input', () => {
+  const t = $('pasteArea').value.trim();
+  if (t.startsWith('{') && t.endsWith('}')) importJson(t);
+});
+async function importJson(text) {
+  let d;
+  try { d = JSON.parse(text); } catch (e) { toast('データの形式が正しくありません'); return; }
+  if (!d || !Array.isArray(d.players) || !Array.isArray(d.sessions)) { toast('データの形式が正しくありません'); return; }
+  if (!await ask(`プレイヤー${d.players.length}人・セッション${d.sessions.length}件を読み込みます。現在のデータは上書きされます。よろしいですか？`, { ok: '読み込む' })) return;
+  db = d; save(); renderHome();
+  $('pasteArea').value = ''; $('pasteArea').classList.add('hidden');
+  toast('読み込みました');
+}
 $('importBtn').onclick = () => $('importFile').click();
 $('importFile').onchange = async e => {
   const f = e.target.files[0];
   e.target.value = '';
-  if (!f) return;
-  try {
-    const d = JSON.parse(await f.text());
-    if (!d || !Array.isArray(d.players) || !Array.isArray(d.sessions)) throw new Error('format');
-    if (!confirm(`プレイヤー${d.players.length}人・セッション${d.sessions.length}件を読み込みます。現在のデータは上書きされます。よろしいですか？`)) return;
-    db = d; save(); renderHome(); toast('読み込みました');
-  } catch (err) { alert('ファイルの形式が正しくありません'); }
+  if (f) importJson(await f.text());
 };
 
 load();
